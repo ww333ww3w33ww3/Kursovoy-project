@@ -1,0 +1,342 @@
+import sys
+from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
+                             QLabel, QLineEdit, QTextEdit, QPushButton, QComboBox, 
+                             QListWidget, QMessageBox, QTabWidget, QGroupBox)
+from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QColor, QPalette
+from PyQt5.QtWebEngineWidgets import QWebEngineView
+import requests
+
+class DeliveryApp(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("Служба доставки")
+        self.setGeometry(100, 100, 800, 600)
+        
+        # Настройка цветовой схемы (красно-бордовая)
+        self.setStyleSheet("""
+            QMainWindow {
+                background-color: #f5f5f5;
+            }
+            QGroupBox {
+                border: 1px solid #800000;
+                border-radius: 5px;
+                margin-top: 10px;
+                padding-top: 15px;
+                font-weight: bold;
+                color: #800000;
+            }
+            QPushButton {
+                background-color: #800000;
+                color: white;
+                border: none;
+                padding: 8px 16px;
+                border-radius: 4px;
+            }
+            QPushButton:hover {
+                background-color: #a00000;
+            }
+            QLineEdit, QTextEdit, QComboBox {
+                border: 1px solid #800000;
+                border-radius: 4px;
+                padding: 5px;
+            }
+            QListWidget {
+                border: 1px solid #800000;
+                border-radius: 4px;
+            }
+        """)
+        
+        # Инициализация данных
+        self.packages = []
+        self.couriers = ["Иванов Иван", "Петров Петр", "Сидорова Анна"]
+        self.tracking_status = {}
+        
+        # Создание вкладок
+        self.tabs = QTabWidget()
+        self.setCentralWidget(self.tabs)
+        
+        # Вкладка отправки посылки
+        self.create_send_tab()
+        
+        # Вкладка отслеживания
+        self.create_track_tab()
+        
+        # Вкладка управления курьерами
+        self.create_couriers_tab()
+        
+        # Вкладка отзывов
+        self.create_feedback_tab()
+        
+        # Вкладка с картой
+        self.create_map_tab()
+    
+    def create_send_tab(self):
+        tab = QWidget()
+        layout = QVBoxLayout()
+        
+        group = QGroupBox("Отправить посылку")
+        group_layout = QVBoxLayout()
+        
+        self.recipient_input = QLineEdit()
+        self.recipient_input.setPlaceholderText("Получатель")
+        
+        self.address_input = QLineEdit()
+        self.address_input.setPlaceholderText("Адрес доставки")
+        
+        self.description_input = QTextEdit()
+        self.description_input.setPlaceholderText("Описание посылки")
+        
+        self.courier_combo = QComboBox()
+        self.courier_combo.addItems(self.couriers)
+        
+        send_btn = QPushButton("Отправить посылку")
+        send_btn.clicked.connect(self.send_package)
+        
+        group_layout.addWidget(QLabel("Получатель:"))
+        group_layout.addWidget(self.recipient_input)
+        group_layout.addWidget(QLabel("Адрес доставки:"))
+        group_layout.addWidget(self.address_input)
+        group_layout.addWidget(QLabel("Описание:"))
+        group_layout.addWidget(self.description_input)
+        group_layout.addWidget(QLabel("Курьер:"))
+        group_layout.addWidget(self.courier_combo)
+        group_layout.addWidget(send_btn)
+        
+        group.setLayout(group_layout)
+        layout.addWidget(group)
+        layout.addStretch()
+        tab.setLayout(layout)
+        self.tabs.addTab(tab, "Отправить посылку")
+    
+    def create_track_tab(self):
+        tab = QWidget()
+        layout = QVBoxLayout()
+        
+        group = QGroupBox("Отследить посылку")
+        group_layout = QVBoxLayout()
+        
+        self.track_input = QLineEdit()
+        self.track_input.setPlaceholderText("Номер посылки")
+        
+        track_btn = QPushButton("Отследить")
+        track_btn.clicked.connect(self.track_package)
+        
+        self.status_label = QLabel("Статус посылки будет отображен здесь")
+        self.status_label.setWordWrap(True)
+        
+        group_layout.addWidget(QLabel("Номер посылки:"))
+        group_layout.addWidget(self.track_input)
+        group_layout.addWidget(track_btn)
+        group_layout.addWidget(QLabel("\nСтатус:"))
+        group_layout.addWidget(self.status_label)
+        
+        group.setLayout(group_layout)
+        layout.addWidget(group)
+        layout.addStretch()
+        tab.setLayout(layout)
+        self.tabs.addTab(tab, "Отслеживание")
+    
+    def create_couriers_tab(self):
+        tab = QWidget()
+        layout = QVBoxLayout()
+        
+        group = QGroupBox("Управление курьерами")
+        group_layout = QVBoxLayout()
+        
+        self.new_courier_input = QLineEdit()
+        self.new_courier_input.setPlaceholderText("Имя курьера")
+        
+        add_btn = QPushButton("Добавить курьера")
+        add_btn.clicked.connect(self.add_courier)
+        
+        self.couriers_list = QListWidget()
+        self.couriers_list.addItems(self.couriers)
+        
+        remove_btn = QPushButton("Удалить выбранного курьера")
+        remove_btn.clicked.connect(self.remove_courier)
+        
+        group_layout.addWidget(QLabel("Добавить курьера:"))
+        group_layout.addWidget(self.new_courier_input)
+        group_layout.addWidget(add_btn)
+        group_layout.addWidget(QLabel("\nСписок курьеров:"))
+        group_layout.addWidget(self.couriers_list)
+        group_layout.addWidget(remove_btn)
+        
+        group.setLayout(group_layout)
+        layout.addWidget(group)
+        layout.addStretch()
+        tab.setLayout(layout)
+        self.tabs.addTab(tab, "Курьеры")
+    
+    def create_feedback_tab(self):
+        tab = QWidget()
+        layout = QVBoxLayout()
+        
+        group = QGroupBox("Оставить отзыв")
+        group_layout = QVBoxLayout()
+        
+        self.feedback_name_input = QLineEdit()
+        self.feedback_name_input.setPlaceholderText("Ваше имя")
+        
+        self.feedback_text = QTextEdit()
+        self.feedback_text.setPlaceholderText("Ваш отзыв")
+        
+        feedback_btn = QPushButton("Отправить отзыв")
+        feedback_btn.clicked.connect(self.submit_feedback)
+        
+        group_layout.addWidget(QLabel("Ваше имя:"))
+        group_layout.addWidget(self.feedback_name_input)
+        group_layout.addWidget(QLabel("Отзыв:"))
+        group_layout.addWidget(self.feedback_text)
+        group_layout.addWidget(feedback_btn)
+        
+        group.setLayout(group_layout)
+        layout.addWidget(group)
+        layout.addStretch()
+        tab.setLayout(layout)
+        self.tabs.addTab(tab, "Отзывы")
+    
+    def create_map_tab(self):
+        tab = QWidget()
+        layout = QVBoxLayout()
+        
+        group = QGroupBox("Карта доставки")
+        group_layout = QVBoxLayout()
+        
+        self.map_view = QWebEngineView()
+        self.map_view.setHtml("""
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="utf-8">
+                <title>Карта</title>
+                <script src="https://api-maps.yandex.ru/2.1/?apikey=ваш_api_ключ&lang=ru_RU" type="text/javascript"></script>
+                <style>
+                    #map { width: 100%; height: 400px; }
+                </style>
+            </head>
+            <body>
+                <div id="map"></div>
+                <script>
+                    ymaps.ready(init);
+                    function init() {
+                        var map = new ymaps.Map("map", {
+                            center: [55.76, 37.64],
+                            zoom: 10
+                        });
+                    }
+                </script>
+            </body>
+            </html>
+        """)
+        
+        group_layout.addWidget(self.map_view)
+        group.setLayout(group_layout)
+        layout.addWidget(group)
+        layout.addStretch()
+        tab.setLayout(layout)
+        self.tabs.addTab(tab, "Карта")
+    
+    def send_package(self):
+        recipient = self.recipient_input.text()
+        address = self.address_input.text()
+        description = self.description_input.toPlainText()
+        courier = self.courier_combo.currentText()
+        
+        if not recipient or not address:
+            QMessageBox.warning(self, "Ошибка", "Пожалуйста, заполните все обязательные поля")
+            return
+        
+        package_id = f"PKG{len(self.packages)+1:04d}"
+        self.packages.append({
+            "id": package_id,
+            "recipient": recipient,
+            "address": address,
+            "description": description,
+            "courier": courier,
+            "status": "Посылка отправлена"
+        })
+        
+        self.tracking_status[package_id] = "Посылка отправлена"
+        
+        QMessageBox.information(self, "Успех", 
+            f"Посылка {package_id} успешно отправлена!\nКурьер: {courier}\nСтатус: Посылка отправлена")
+        
+        # Очистка полей
+        self.recipient_input.clear()
+        self.address_input.clear()
+        self.description_input.clear()
+    
+    def track_package(self):
+        package_id = self.track_input.text().strip()
+        
+        if not package_id:
+            QMessageBox.warning(self, "Ошибка", "Введите номер посылки")
+            return
+        
+        status = self.tracking_status.get(package_id, "Посылка с таким номером не найдена")
+        self.status_label.setText(f"Статус посылки {package_id}:\n{status}")
+    
+    def add_courier(self):
+        courier_name = self.new_courier_input.text().strip()
+        
+        if not courier_name:
+            QMessageBox.warning(self, "Ошибка", "Введите имя курьера")
+            return
+        
+        self.couriers.append(courier_name)
+        self.couriers_list.addItem(courier_name)
+        self.courier_combo.addItem(courier_name)
+        self.new_courier_input.clear()
+        
+        QMessageBox.information(self, "Успех", f"Курьер {courier_name} добавлен")
+    
+    def remove_courier(self):
+        selected = self.couriers_list.currentRow()
+        
+        if selected == -1:
+            QMessageBox.warning(self, "Ошибка", "Выберите курьера для удаления")
+            return
+        
+        courier_name = self.couriers.pop(selected)
+        self.couriers_list.takeItem(selected)
+        
+        # Удаляем из комбобокса
+        index = self.courier_combo.findText(courier_name)
+        if index >= 0:
+            self.courier_combo.removeItem(index)
+        
+        QMessageBox.information(self, "Успех", f"Курьер {courier_name} удален")
+    
+    def submit_feedback(self):
+        name = self.feedback_name_input.text().strip()
+        feedback = self.feedback_text.toPlainText().strip()
+        
+        if not name or not feedback:
+            QMessageBox.warning(self, "Ошибка", "Пожалуйста, заполните все поля")
+            return
+        
+        # Здесь можно добавить сохранение отзыва в файл или базу данных
+        QMessageBox.information(self, "Спасибо!", f"Спасибо за ваш отзыв, {name}!")
+        
+        # Очистка полей
+        self.feedback_name_input.clear()
+        self.feedback_text.clear()
+
+if __name__ == "__main__":
+    app = QApplication(sys.argv)
+    
+    # Дополнительная настройка цветовой палитры
+    palette = QPalette()
+    palette.setColor(QPalette.Window, QColor(245, 245, 245))
+    palette.setColor(QPalette.WindowText, QColor(128, 0, 0))
+    palette.setColor(QPalette.Button, QColor(128, 0, 0))
+    palette.setColor(QPalette.ButtonText, QColor(255, 255, 255))
+    palette.setColor(QPalette.Highlight, QColor(160, 0, 0))
+    palette.setColor(QPalette.HighlightedText, QColor(255, 255, 255))
+    app.setPalette(palette)
+    
+    window = DeliveryApp()
+    window.show()
+    sys.exit(app.exec_())
